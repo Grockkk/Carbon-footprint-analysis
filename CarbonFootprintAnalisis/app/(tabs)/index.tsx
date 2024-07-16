@@ -1,61 +1,113 @@
-import { Image, StyleSheet, View } from 'react-native';
 
-import { HelloWave } from '@/components/HelloWave';
-import ParallaxScrollView from '@/components/ParallaxScrollView';
-import { ThemedText } from '@/components/ThemedText';
-import { ThemedView } from '@/components/ThemedView';
+// 267231584851-hv6mhlu07a847o92i3mnt1006kanl32o.apps.googleusercontent.com
+import { useEffect, useState } from "react";
+import { StyleSheet, Text, View, Button, Image } from "react-native";
+import * as WebBrowser from "expo-web-browser";
+import * as Google from "expo-auth-session/providers/google";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
-export default function HomeScreen() {
+WebBrowser.maybeCompleteAuthSession();
+
+export default function App() {
+  const [token, setToken] = useState("");
+  const [userInfo, setUserInfo] = useState(null);
+
+  const [request, response, promptAsync] = Google.useAuthRequest({
+    androidClientId: "267231584851-hv6mhlu07a847o92i3mnt1006kanl32o.apps.googleusercontent.com",
+  });
+
+  useEffect(() => {
+    handleEffect();
+  }, [response, token]);
+
+  async function handleEffect() {
+    const user = await getLocalUser();
+    console.log("user", user);
+    if (!user) {
+      if (response?.type === "success" && response.authentication != null) {
+        // setToken(response.authentication.accessToken);
+        getUserInfo(response.authentication.accessToken);
+      }
+    } else {
+      setUserInfo(user);
+      console.log("loaded locally");
+    }
+  }
+
+  const getLocalUser = async () => {
+    const data = await AsyncStorage.getItem("@user");
+    if (!data) return null;
+    return JSON.parse(data);
+  };
+
+  const getUserInfo = async (token) => {
+    if (!token) return;
+    try {
+      const response = await fetch(
+        "https://www.googleapis.com/userinfo/v2/me",
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        }
+      );
+
+      const user = await response.json();
+      await AsyncStorage.setItem("@user", JSON.stringify(user));
+      setUserInfo(user);
+    } catch (error) {
+      // Add your own error handler here
+    }
+  };
+
   return (
-    <ParallaxScrollView
-      headerBackgroundColor={{ light: '#A1CEDC', dark: '#1D3D47' }}
-      headerImage={
-        <View style={styles.headerContainer}>
-          <Image
-            source={require('@/assets/images/sunset.png')}
-            style={styles.headerImage}
-          />
-          <View style={styles.overlay}>
-            <ThemedText type="title" style={styles.headerText}>Explore</ThemedText>
-          </View>
+    <View style={styles.container}>
+      {!userInfo ? (
+        <Button
+          title="Sign in with Google"
+          disabled={!request}
+          onPress={() => {
+            promptAsync();
+          }}
+        />
+      ) : (
+        <View style={styles.card}>
+          {userInfo?.picture && (
+            <Image source={{ uri: userInfo?.picture }} style={styles.image} />
+          )}
+          <Text style={styles.text}>Email: {userInfo.email}</Text>
+          <Text style={styles.text}>
+            Verified: {userInfo.verified_email ? "yes" : "no"}
+          </Text>
+          <Text style={styles.text}>Name: {userInfo.name}</Text>
+          {/* <Text style={styles.text}>{JSON.stringify(userInfo, null, 2)}</Text> */}
         </View>
-      }>
-    </ParallaxScrollView>
+      )}
+      <Button
+        title="remove local store"
+        onPress={async () => await AsyncStorage.removeItem("@user")}
+      />
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  headerContainer: {
-    position: 'relative',
-    alignSelf: 'center',
-    height: 400,
-    width: 400,
+  container: {
+    flex: 1,
+    backgroundColor: "#fff",
+    alignItems: "center",
+    justifyContent: "center",
   },
-  headerImage: {
-    height: '100%',
-    width: '100%',
+  text: {
+    fontSize: 20,
+    fontWeight: "bold",
   },
-  overlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    justifyContent: 'center',
-    alignItems: 'center',
+  card: {
+    borderWidth: 1,
+    borderRadius: 15,
+    padding: 15,
   },
-  headerText: {
-    color: 'black',
-    fontSize: 34,
-    fontWeight: 'bold',
-  },
-  titleContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  stepContainer: {
-    gap: 8,
-    marginBottom: 8,
+  image: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
   },
 });
